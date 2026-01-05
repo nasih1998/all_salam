@@ -1,20 +1,16 @@
-# PHP 8.1 with Apache
+# Use official PHP image with Apache
 FROM php:8.1-apache
 
 # Set working directory
 WORKDIR /var/www/html
 
-# Install system dependencies
+# Install system dependencies and PHP extensions in one layer
 RUN apt-get update && apt-get install -y \
-    git \
-    curl \
     libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    libzip-dev \
+    libjpeg-dev \
     libfreetype6-dev \
-    libjpeg62-turbo-dev \
-    zip \
+    libzip-dev \
+    libicu-dev \
     unzip \
     && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install pdo_mysql mbstring exif pcntl bcmath gd zip intl \
@@ -23,28 +19,27 @@ RUN apt-get update && apt-get install -y \
 # Enable Apache mod_rewrite
 RUN a2enmod rewrite
 
-# Configure Apache
-RUN sed -i 's!/var/www/html!/var/www/html/public!g' /etc/apache2/sites-available/000-default.conf
-RUN sed -i 's/AllowOverride None/AllowOverride All/g' /etc/apache2/apache2.conf
+# Set Apache document root to Laravel public folder
+ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
+RUN sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf
+RUN sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf
+
+# Allow .htaccess files
+RUN sed -i '/<Directory \/var\/www\/>/,/<\/Directory>/ s/AllowOverride None/AllowOverride All/' /etc/apache2/apache2.conf
 
 # Install Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # Copy application files
 COPY . .
 
-# Set correct permissions
+# Install dependencies
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+
+# Set permissions
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
-
-# Install PHP dependencies (skip dev dependencies for production)
-RUN composer install --no-dev --optimize-autoloader --no-interaction
-
-# Generate optimized autoload files
-RUN php artisan config:cache || true
-RUN php artisan route:cache || true
-RUN php artisan view:cache || true
 
 # Expose port 80
 EXPOSE 80
