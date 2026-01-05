@@ -37,13 +37,35 @@ COPY . .
 # Install dependencies (skip scripts that need database)
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress --no-scripts
 
+# Create storage directories if they don't exist
+RUN mkdir -p storage/framework/cache/data \
+    && mkdir -p storage/framework/sessions \
+    && mkdir -p storage/framework/views \
+    && mkdir -p storage/logs \
+    && mkdir -p bootstrap/cache
+
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \
-    && chmod -R 755 /var/www/html/storage \
-    && chmod -R 755 /var/www/html/bootstrap/cache
+    && chmod -R 775 /var/www/html/storage \
+    && chmod -R 775 /var/www/html/bootstrap/cache
+
+# Create startup script
+RUN echo '#!/bin/bash\n\
+    # Generate APP_KEY if not set\n\
+    if [ -z "$APP_KEY" ]; then\n\
+    php artisan key:generate --force 2>/dev/null || true\n\
+    fi\n\
+    # Create storage link\n\
+    php artisan storage:link 2>/dev/null || true\n\
+    # Clear and cache config\n\
+    php artisan config:clear 2>/dev/null || true\n\
+    php artisan cache:clear 2>/dev/null || true\n\
+    # Start Apache\n\
+    apache2-foreground\n\
+    ' > /start.sh && chmod +x /start.sh
 
 # Expose port 80
 EXPOSE 80
 
-# Start Apache
-CMD ["apache2-foreground"]
+# Start with our script
+CMD ["/start.sh"]
