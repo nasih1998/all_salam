@@ -49,15 +49,18 @@ RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage \
     && chmod -R 775 /var/www/html/bootstrap/cache
 
-# Create startup script
+# Create startup script that generates .env file from environment variables
 RUN echo '#!/bin/bash\n\
-    # Generate APP_KEY if not set\n\
-    if [ -z "$APP_KEY" ]; then\n\
-    php artisan key:generate --force 2>/dev/null || true\n\
-    fi\n\
+    # Create .env file from environment variables\n\
+    env | grep -E "^(APP_|DB_|MAIL_|REDIS_|CACHE_|SESSION_|QUEUE_|BROADCAST_|LOG_|STRIPE_|TWILIO_|PUSHER_|AWS_|MIX_|VITE_|DUMP_|base_url|api_key|sender_from)" | while read line; do\n\
+    echo "$line" >> /var/www/html/.env\n\
+    done\n\
+    # Set permissions on .env\n\
+    chown www-data:www-data /var/www/html/.env 2>/dev/null || true\n\
+    chmod 644 /var/www/html/.env 2>/dev/null || true\n\
     # Create storage link\n\
     php artisan storage:link 2>/dev/null || true\n\
-    # Clear and cache config\n\
+    # Clear caches\n\
     php artisan config:clear 2>/dev/null || true\n\
     php artisan cache:clear 2>/dev/null || true\n\
     # Start Apache\n\
