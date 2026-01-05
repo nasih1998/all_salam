@@ -34,8 +34,8 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 # Copy application files
 COPY . .
 
-# Install dependencies
-RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress
+# Install dependencies (skip scripts that need database)
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-progress --no-scripts
 
 # Set permissions
 RUN chown -R www-data:www-data /var/www/html \
